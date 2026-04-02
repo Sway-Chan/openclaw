@@ -152,6 +152,7 @@ class ConnectionManager(
       permissions = emptyMap(),
       client = buildClientInfo(clientId = "openclaw-android", clientMode = "ui"),
       userAgent = buildUserAgent(),
+      retryOnPairingRequired = true,
     )
   }
 

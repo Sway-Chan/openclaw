@@ -22,6 +22,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -214,6 +215,67 @@ class GatewaySessionInvokeTest {
   }
 
   @Test
+  fun connect_retriesOperatorPairingUntilApprovalArrives() = runBlocking {
+    val json = testJson()
+    val connected = CompletableDeferred<Unit>()
+    val firstConnectAuth = CompletableDeferred<JsonObject?>()
+    val secondConnectAuth = CompletableDeferred<JsonObject?>()
+    val connectAttempts = AtomicInteger(0)
+    val lastDisconnect = AtomicReference("")
+    val server =
+      startGatewayServer(json) { webSocket, id, method, frame ->
+        when (method) {
+          "connect" -> {
+            val auth = frame["params"]?.jsonObject?.get("auth")?.jsonObject
+            when (connectAttempts.incrementAndGet()) {
+              1 -> {
+                if (!firstConnectAuth.isCompleted) {
+                  firstConnectAuth.complete(auth)
+                }
+                webSocket.send(
+                  """{"type":"res","id":"$id","ok":false,"error":{"code":"INVALID_REQUEST","message":"pairing required","details":{"code":"PAIRING_REQUIRED"}}}""",
+                )
+                webSocket.close(1000, "approval pending")
+              }
+              else -> {
+                if (!secondConnectAuth.isCompleted) {
+                  secondConnectAuth.complete(auth)
+                }
+                webSocket.send(connectResponseFrame(id))
+                webSocket.close(1000, "done")
+              }
+            }
+          }
+        }
+      }
+
+    val harness =
+      createNodeHarness(
+        connected = connected,
+        lastDisconnect = lastDisconnect,
+      ) { GatewaySession.InvokeResult.ok("""{"handled":true}""") }
+
+    try {
+      connectSession(
+        session = harness.session,
+        port = server.port,
+        token = null,
+        bootstrapToken = "bootstrap-token",
+        options = testConnectOptions(role = "operator", mode = "ui", retryOnPairingRequired = true),
+      )
+      awaitConnectedOrThrow(connected, lastDisconnect, server)
+
+      val firstAuth = withTimeout(TEST_TIMEOUT_MS) { firstConnectAuth.await() }
+      val secondAuth = withTimeout(TEST_TIMEOUT_MS) { secondConnectAuth.await() }
+      assertEquals("bootstrap-token", firstAuth?.get("bootstrapToken")?.jsonPrimitive?.content)
+      assertEquals("bootstrap-token", secondAuth?.get("bootstrapToken")?.jsonPrimitive?.content)
+      assertTrue(connectAttempts.get() >= 2)
+    } finally {
+      shutdownHarness(harness, server)
+    }
+  }
+
+  @Test
   fun nodeInvokeRequest_roundTripsInvokeResult() = runBlocking {
     val handshakeOrigin = AtomicReference<String?>(null)
     val result =
@@ -364,6 +426,22 @@ class GatewaySessionInvokeTest {
     token: String? = "test-token",
     bootstrapToken: String? = null,
   ) {
+    connectSession(
+      session = session,
+      port = port,
+      token = token,
+      bootstrapToken = bootstrapToken,
+      options = testConnectOptions(role = "node", mode = "node"),
+    )
+  }
+
+  private suspend fun connectSession(
+    session: GatewaySession,
+    port: Int,
+    token: String?,
+    bootstrapToken: String?,
+    options: GatewayConnectOptions,
+  ) {
     session.connect(
       endpoint =
         GatewayEndpoint(
@@ -376,26 +454,34 @@ class GatewaySessionInvokeTest {
       token = token,
       bootstrapToken = bootstrapToken,
       password = null,
-      options =
-        GatewayConnectOptions(
-          role = "node",
-          scopes = listOf("node:invoke"),
-          caps = emptyList(),
-          commands = emptyList(),
-          permissions = emptyMap(),
-          client =
-            GatewayClientInfo(
-              id = "openclaw-android-test",
-              displayName = "Android Test",
-              version = "1.0.0-test",
-              platform = "android",
-              mode = "node",
-              instanceId = "android-test-instance",
-              deviceFamily = "android",
-              modelIdentifier = "test",
-            ),
-        ),
+      options = options,
       tls = null,
+    )
+  }
+
+  private fun testConnectOptions(
+    role: String,
+    mode: String,
+    retryOnPairingRequired: Boolean = false,
+  ): GatewayConnectOptions {
+    return GatewayConnectOptions(
+      role = role,
+      scopes = if (role == "node") listOf("node:invoke") else listOf("operator.read"),
+      caps = emptyList(),
+      commands = emptyList(),
+      permissions = emptyMap(),
+      client =
+        GatewayClientInfo(
+          id = "openclaw-android-test",
+          displayName = "Android Test",
+          version = "1.0.0-test",
+          platform = "android",
+          mode = mode,
+          instanceId = "android-test-instance",
+          deviceFamily = "android",
+          modelIdentifier = "test",
+        ),
+      retryOnPairingRequired = retryOnPairingRequired,
     )
   }
 

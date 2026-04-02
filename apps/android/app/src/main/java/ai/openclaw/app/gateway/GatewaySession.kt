@@ -50,6 +50,7 @@ data class GatewayConnectOptions(
   val permissions: Map<String, Boolean>,
   val client: GatewayClientInfo,
   val userAgent: String? = null,
+  val retryOnPairingRequired: Boolean = false,
 )
 
 private enum class GatewayConnectAuthSource {
@@ -706,12 +707,12 @@ class GatewaySession(
         onDisconnected("Gateway error: ${err.message ?: err::class.java.simpleName}")
         if (
           err is GatewayConnectFailure &&
-            shouldPauseReconnectAfterAuthFailure(err.gatewayError)
+            shouldPauseReconnectAfterAuthFailure(err.gatewayError, target.options)
         ) {
           reconnectPausedForAuthFailure = true
           continue
         }
-        val sleepMs = minOf(8_000L, (350.0 * Math.pow(1.7, attempt.toDouble())).toLong())
+        val sleepMs = resolveReconnectDelayMs(err, target.options, attempt)
         delay(sleepMs)
       }
     }
@@ -868,19 +869,37 @@ class GatewaySession(
       detailCode == "AUTH_TOKEN_MISMATCH"
   }
 
-  private fun shouldPauseReconnectAfterAuthFailure(error: ErrorShape): Boolean {
+  private fun shouldPauseReconnectAfterAuthFailure(
+    error: ErrorShape,
+    options: GatewayConnectOptions,
+  ): Boolean {
     return when (error.details?.code) {
       "AUTH_TOKEN_MISSING",
       "AUTH_BOOTSTRAP_TOKEN_INVALID",
       "AUTH_PASSWORD_MISSING",
       "AUTH_PASSWORD_MISMATCH",
       "AUTH_RATE_LIMITED",
-      "PAIRING_REQUIRED",
       "CONTROL_UI_DEVICE_IDENTITY_REQUIRED",
       "DEVICE_IDENTITY_REQUIRED" -> true
+      "PAIRING_REQUIRED" -> !options.retryOnPairingRequired
       "AUTH_TOKEN_MISMATCH" -> deviceTokenRetryBudgetUsed && !pendingDeviceTokenRetry
       else -> false
     }
+  }
+
+  private fun resolveReconnectDelayMs(
+    err: Throwable,
+    options: GatewayConnectOptions,
+    attempt: Int,
+  ): Long {
+    if (
+      err is GatewayConnectFailure &&
+        err.gatewayError.details?.code == "PAIRING_REQUIRED" &&
+        options.retryOnPairingRequired
+    ) {
+      return 3_000L
+    }
+    return minOf(8_000L, (350.0 * Math.pow(1.7, attempt.toDouble())).toLong())
   }
 
   private fun shouldClearStoredDeviceTokenAfterRetry(error: ErrorShape): Boolean {
