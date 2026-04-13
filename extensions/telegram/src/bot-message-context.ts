@@ -33,7 +33,7 @@ import {
   resolveTelegramReactionVariant,
   resolveTelegramStatusReactionEmojis,
 } from "./status-reaction-variants.js";
-import { getTopicName, updateTopicName } from "./topic-name-cache.js";
+import { getTopicName, resolveTopicNameCachePath, updateTopicName } from "./topic-name-cache.js";
 
 export type {
   BuildTelegramMessageContextParams,
@@ -148,6 +148,9 @@ export const buildTelegramMessageContext = async ({
   const resolvedThreadId = threadSpec.scope === "forum" ? threadSpec.id : undefined;
   const replyThreadId = threadSpec.id;
   const dmThreadId = threadSpec.scope === "dm" ? threadSpec.id : undefined;
+  const topicNameCachePath = resolveTopicNameCachePath(
+    sessionRuntime.resolveStorePath(cfg.session?.store, { agentId: account.accountId }),
+  );
   let topicName: string | undefined;
   if (isForum && resolvedThreadId != null) {
     const ftCreated = msg.forum_topic_created;
@@ -156,32 +159,47 @@ export const buildTelegramMessageContext = async ({
     const ftReopened = msg.forum_topic_reopened;
 
     if (ftCreated?.name) {
-      updateTopicName(chatId, resolvedThreadId, {
-        name: ftCreated.name,
-        iconColor: ftCreated.icon_color,
-        iconCustomEmojiId: ftCreated.icon_custom_emoji_id,
-        closed: false,
-      });
+      updateTopicName(
+        chatId,
+        resolvedThreadId,
+        {
+          name: ftCreated.name,
+          iconColor: ftCreated.icon_color,
+          iconCustomEmojiId: ftCreated.icon_custom_emoji_id,
+          closed: false,
+        },
+        topicNameCachePath,
+      );
     } else if (ftEdited?.name) {
-      updateTopicName(chatId, resolvedThreadId, {
-        name: ftEdited.name,
-        iconCustomEmojiId: ftEdited.icon_custom_emoji_id,
-      });
+      updateTopicName(
+        chatId,
+        resolvedThreadId,
+        {
+          name: ftEdited.name,
+          iconCustomEmojiId: ftEdited.icon_custom_emoji_id,
+        },
+        topicNameCachePath,
+      );
     } else if (ftClosed) {
-      updateTopicName(chatId, resolvedThreadId, { closed: true });
+      updateTopicName(chatId, resolvedThreadId, { closed: true }, topicNameCachePath);
     } else if (ftReopened) {
-      updateTopicName(chatId, resolvedThreadId, { closed: false });
+      updateTopicName(chatId, resolvedThreadId, { closed: false }, topicNameCachePath);
     }
 
-    topicName = getTopicName(chatId, resolvedThreadId);
+    topicName = getTopicName(chatId, resolvedThreadId, topicNameCachePath);
     if (!topicName) {
       const replyFtCreated = msg.reply_to_message?.forum_topic_created;
       if (replyFtCreated?.name) {
-        updateTopicName(chatId, resolvedThreadId, {
-          name: replyFtCreated.name,
-          iconColor: replyFtCreated.icon_color,
-          iconCustomEmojiId: replyFtCreated.icon_custom_emoji_id,
-        });
+        updateTopicName(
+          chatId,
+          resolvedThreadId,
+          {
+            name: replyFtCreated.name,
+            iconColor: replyFtCreated.icon_color,
+            iconCustomEmojiId: replyFtCreated.icon_custom_emoji_id,
+          },
+          topicNameCachePath,
+        );
         topicName = replyFtCreated.name;
       }
     }

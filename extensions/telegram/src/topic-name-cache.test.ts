@@ -1,8 +1,12 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   clearTopicNameCache,
   getTopicEntry,
   getTopicName,
+  resetTopicNameCacheForTest,
   topicNameCacheSize,
   updateTopicName,
 } from "./topic-name-cache.js";
@@ -10,6 +14,7 @@ import {
 describe("topic-name-cache", () => {
   beforeEach(() => {
     clearTopicNameCache();
+    resetTopicNameCacheForTest();
   });
 
   it("stores and retrieves a topic name", () => {
@@ -90,5 +95,18 @@ describe("topic-name-cache", () => {
     updateTopicName(-100000, 9999, { name: "Newcomer" });
     expect(getTopicName(-100000, 1)).toBe("Active");
     expect(topicNameCacheSize()).toBe(2048);
+  });
+
+  it("reloads persisted entries from disk", async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-topic-cache-"));
+    const persistedPath = path.join(tempDir, "topic-names.json");
+    try {
+      updateTopicName(-100123, 42, { name: "Deployments" }, persistedPath);
+      resetTopicNameCacheForTest();
+      expect(getTopicName(-100123, 42, persistedPath)).toBe("Deployments");
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+      resetTopicNameCacheForTest();
+    }
   });
 });
