@@ -49,4 +49,42 @@ describe("resolveGroupActivationFor", () => {
       expect(scopedEntry?.updatedAt).toBeUndefined();
     });
   });
+
+  it("preserves legacy group activation when the scoped entry already exists without activation", async () => {
+    const sessionKey = "agent:main:whatsapp:group:123@g.us:thread:whatsapp-account-work";
+    const legacySessionKey = "agent:main:whatsapp:group:123@g.us";
+    const { storePath, cleanup } = await makeSessionStore({
+      [legacySessionKey]: {
+        groupActivation: "always",
+      },
+      [sessionKey]: {
+        sessionId: "scoped-session",
+      },
+    });
+    cleanups.push(cleanup);
+
+    const activation = await resolveGroupActivationFor({
+      cfg: {
+        channels: {
+          whatsapp: {
+            accounts: {
+              work: {},
+            },
+          },
+        },
+        session: { store: storePath },
+      } as never,
+      accountId: "work",
+      agentId: "main",
+      sessionKey,
+      conversationId: "123@g.us",
+    });
+
+    expect(activation).toBe("always");
+    await vi.waitFor(() => {
+      const scopedEntry = loadSessionStore(storePath, { skipCache: true })[sessionKey];
+      expect(scopedEntry?.groupActivation).toBe("always");
+      expect(scopedEntry?.sessionId).toBe("scoped-session");
+    });
+  });
 });

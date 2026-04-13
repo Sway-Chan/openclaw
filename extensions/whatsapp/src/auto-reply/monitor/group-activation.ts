@@ -22,16 +22,17 @@ export async function resolveGroupActivationFor(params: {
     accountId: params.accountId,
   });
   const legacyEntry = legacySessionKey ? store[legacySessionKey] : undefined;
-  const entry = store[params.sessionKey] ?? legacyEntry;
-  if (!store[params.sessionKey] && legacyEntry?.groupActivation !== undefined) {
+  const scopedEntry = store[params.sessionKey];
+  const activation = scopedEntry?.groupActivation ?? legacyEntry?.groupActivation;
+  if (activation !== undefined && scopedEntry?.groupActivation === undefined) {
     await updateSessionStore(storePath, (nextStore) => {
-      const scopedEntry = nextStore[params.sessionKey];
-      if (scopedEntry?.groupActivation !== undefined) {
+      const nextScopedEntry = nextStore[params.sessionKey];
+      if (nextScopedEntry?.groupActivation !== undefined) {
         return;
       }
       nextStore[params.sessionKey] = {
-        ...scopedEntry,
-        groupActivation: legacyEntry.groupActivation,
+        ...nextScopedEntry,
+        groupActivation: activation,
       };
     });
   }
@@ -40,5 +41,5 @@ export async function resolveGroupActivationFor(params: {
     accountId: params.accountId,
   }).resolveConversationRequireMention(params.conversationId);
   const defaultActivation = !requireMention ? "always" : "mention";
-  return normalizeGroupActivation(entry?.groupActivation) ?? defaultActivation;
+  return normalizeGroupActivation(activation) ?? defaultActivation;
 }

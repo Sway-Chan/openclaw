@@ -121,12 +121,10 @@ export async function applyGroupGating(params: ApplyGroupGatingParams) {
   const baseMentionConfig = {
     ...params.baseMentionConfig,
     allowFrom: inboundPolicy.configuredAllowFrom,
-    isSelfChat: inboundPolicy.isSelfChat,
   };
   const mentionConfig = {
     ...buildMentionConfig(params.cfg, params.agentId),
     allowFrom: inboundPolicy.configuredAllowFrom,
-    isSelfChat: inboundPolicy.isSelfChat,
   };
   const commandBody = stripMentionsForCommand(
     params.msg.body,
