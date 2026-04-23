@@ -153,8 +153,10 @@ async function sendOutboundText(params: {
     }
   }
 
+  // Compute thread mode BEFORE resolving (resolve may set replyToMessageId from threadId)
+  const shouldReplyInThread = threadId != null && !replyToMessageId;
   const resolvedReplyTo = resolveReplyToMessageId({ replyToId: replyToMessageId, threadId });
-  return sendMessageFeishu({ cfg, to, text, accountId, replyToMessageId: resolvedReplyTo, replyInThread: threadId != null && !replyToMessageId });
+  return sendMessageFeishu({ cfg, to, text, accountId, replyToMessageId: resolvedReplyTo, replyInThread: shouldReplyInThread });
 }
 
 
