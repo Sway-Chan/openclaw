@@ -154,7 +154,7 @@ async function sendOutboundText(params: {
   }
 
   const resolvedReplyTo = resolveReplyToMessageId({ replyToId: replyToMessageId, threadId });
-  return sendMessageFeishu({ cfg, to, text, accountId, replyToMessageId: resolvedReplyTo });
+  return sendMessageFeishu({ cfg, to, text, accountId, replyToMessageId: resolvedReplyTo, replyInThread: threadId != null && !replyToMessageId });
 }
 
 
