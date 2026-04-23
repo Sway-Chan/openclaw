@@ -127,6 +127,8 @@ async function sendOutboundText(params: {
   text: string;
   replyToMessageId?: string;
   threadId?: string | number | null;
+  /** Explicit reply-in-thread flag; overrides auto-detection */
+  replyInThread?: boolean;
   accountId?: string;
 }) {
   const { cfg, to, text, accountId, replyToMessageId, threadId } = params;
@@ -153,8 +155,8 @@ async function sendOutboundText(params: {
     }
   }
 
-  // Compute thread mode BEFORE resolving (resolve may set replyToMessageId from threadId)
-  const shouldReplyInThread = threadId != null && !replyToMessageId;
+  // Use explicit flag when provided; otherwise detect from original params
+  const shouldReplyInThread = params.replyInThread ?? (threadId != null && !replyToMessageId);
   const resolvedReplyTo = resolveReplyToMessageId({ replyToId: replyToMessageId, threadId });
   return sendMessageFeishu({ cfg, to, text, accountId, replyToMessageId: resolvedReplyTo, replyInThread: shouldReplyInThread });
 }
@@ -242,6 +244,7 @@ export const feishuOutbound: ChannelOutboundAdapter = {
         accountId: accountId ?? undefined,
         replyToMessageId,
         threadId,
+        replyInThread: threadId != null && !replyToId,
       });
     },
     sendMedia: async ({
