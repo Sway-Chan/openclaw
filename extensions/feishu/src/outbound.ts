@@ -150,7 +150,7 @@ async function sendOutboundText(params: {
     try {
       return await sendMarkdownCardFeishu({ cfg, to, text, accountId, replyToMessageId });
     } catch (err) {
-      if (!isCardTableLimitError(err)) throw err;
+      if (!isCardTableLimitError(err)) { throw err; }
       console.warn("[feishu] card table limit hit (230099/11310), falling back to plain text");
     }
   }
@@ -233,7 +233,7 @@ export const feishuOutbound: ChannelOutboundAdapter = {
             header: header?.title ? header : undefined,
           });
         } catch (err) {
-          if (!isCardTableLimitError(err)) throw err;
+          if (!isCardTableLimitError(err)) { throw err; }
           console.warn("[feishu] structured card table limit hit (230099/11310), falling back to plain text");
         }
       }

@@ -49,10 +49,11 @@ export function parseCardKitError(raw: unknown): CardKitApiErrorData | null {
   // Try to parse as JSON first (structured error envelope)
   const parsed = tryParseJson(msg);
   if (parsed) {
+    const p = parsed as { code?: unknown; data?: { code?: unknown; msg?: unknown }; msg?: unknown };
     return {
-      code: typeof parsed.code === "number" ? parsed.code : undefined,
-      errCode: typeof parsed.data?.code === "number" ? parsed.data.code : undefined,
-      msg: parsed.data?.msg ?? parsed.msg ?? undefined,
+      code: typeof p.code === "number" ? p.code as number : undefined,
+      errCode: typeof p.data?.code === "number" ? p.data.code as number : undefined,
+      msg: (p.data?.msg ?? p.msg) as string | undefined,
     };
   }
 
@@ -63,23 +64,23 @@ export function parseCardKitError(raw: unknown): CardKitApiErrorData | null {
 /** True when the error is a card table-count-over-limit rejection. */
 export function isCardTableLimitError(err: unknown): boolean {
   const data = parseCardKitError(err);
-  if (!data) return false;
+  if (!data) { return false; }
 
   const hasOuterCode = data.code === 230099;
   const hasInnerCode = data.errCode === 11310;
   const hasMsg = /table\s+number\s+over\s+limit/i.test(data.msg ?? "");
 
   // Strong signal: outer code + inner code/msg
-  if (hasOuterCode && (hasInnerCode || hasMsg)) return true;
+  if (hasOuterCode && (hasInnerCode || hasMsg)) { return true; }
   // Weak signal: message alone (covers plain-string errors from assertFeishuMessageApiSuccess)
-  if (hasMsg && !hasOuterCode) return true;
+  if (hasMsg && !hasOuterCode) { return true; }
   return false;
 }
 
 /** True when the error is a card rate-limit (429-equivalent at card-kit level). */
 export function isCardRateLimitError(err: unknown): boolean {
   const data = parseCardKitError(err);
-  if (!data) return false;
+  if (!data) { return false; }
   return data.code === 230099 && /rate.?limit/i.test(data.msg ?? "");
 }
 
@@ -89,7 +90,7 @@ function tryParseJson(s: string): Record<string, unknown> | null {
   // Feishu SDK errors often look like: "Feishu card send failed: {...}"
   // Try to extract the JSON portion.
   const jsonMatch = s.match(/\{[\s\S]*\}$/);
-  if (!jsonMatch) return null;
+  if (!jsonMatch) { return null; }
   try {
     return JSON.parse(jsonMatch[0]) as Record<string, unknown>;
   } catch {
