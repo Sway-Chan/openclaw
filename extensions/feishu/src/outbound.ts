@@ -10,6 +10,7 @@ import { deliverCommentThreadText } from "./drive.js";
 import { sendMediaFeishu } from "./media.js";
 import { chunkTextForOutbound, type ChannelOutboundAdapter } from "./outbound-runtime-api.js";
 import { sendMarkdownCardFeishu, sendMessageFeishu, sendStructuredCardFeishu } from "./send.js";
+import { isCardTableLimitError } from "./card-error.js";
 
 function normalizePossibleLocalImagePath(text: string | undefined): string | null {
   const raw = text?.trim();
@@ -143,7 +144,12 @@ async function sendOutboundText(params: {
   const renderMode = account.config?.renderMode ?? "auto";
 
   if (renderMode === "card" || (renderMode === "auto" && shouldUseCard(text))) {
-    return sendMarkdownCardFeishu({ cfg, to, text, accountId, replyToMessageId });
+    try {
+      return sendMarkdownCardFeishu({ cfg, to, text, accountId, replyToMessageId });
+    } catch (err) {
+      if (!isCardTableLimitError(err)) throw err;
+      console.warn("[feishu] card table limit hit (230099/11310), falling back to plain text");
+    }
   }
 
   return sendMessageFeishu({ cfg, to, text, accountId, replyToMessageId });
@@ -209,15 +215,20 @@ export const feishuOutbound: ChannelOutboundAdapter = {
               template: "blue" as const,
             }
           : undefined;
-        return await sendStructuredCardFeishu({
-          cfg,
-          to,
-          text,
-          replyToMessageId,
-          replyInThread: threadId != null && !replyToId,
-          accountId: accountId ?? undefined,
-          header: header?.title ? header : undefined,
-        });
+        try {
+          return await sendStructuredCardFeishu({
+            cfg,
+            to,
+            text,
+            replyToMessageId,
+            replyInThread: threadId != null && !replyToId,
+            accountId: accountId ?? undefined,
+            header: header?.title ? header : undefined,
+          });
+        } catch (err) {
+          if (!isCardTableLimitError(err)) throw err;
+          console.warn("[feishu] structured card table limit hit (230099/11310), falling back to plain text");
+        }
       }
       return await sendOutboundText({
         cfg,
