@@ -145,7 +145,7 @@ async function sendOutboundText(params: {
 
   if (renderMode === "card" || (renderMode === "auto" && shouldUseCard(text))) {
     try {
-      return sendMarkdownCardFeishu({ cfg, to, text, accountId, replyToMessageId });
+      return await sendMarkdownCardFeishu({ cfg, to, text, accountId, replyToMessageId });
     } catch (err) {
       if (!isCardTableLimitError(err)) throw err;
       console.warn("[feishu] card table limit hit (230099/11310), falling back to plain text");
