@@ -69,8 +69,11 @@ export function isCardTableLimitError(err: unknown): boolean {
   const hasInnerCode = data.errCode === 11310;
   const hasMsg = /table\s+number\s+over\s+limit/i.test(data.msg ?? "");
 
-  // Require at least the outer code + one other signal to avoid false positives.
-  return hasOuterCode && (hasInnerCode || hasMsg);
+  // Strong signal: outer code + inner code/msg
+  if (hasOuterCode && (hasInnerCode || hasMsg)) return true;
+  // Weak signal: message alone (covers plain-string errors from assertFeishuMessageApiSuccess)
+  if (hasMsg && !hasOuterCode) return true;
+  return false;
 }
 
 /** True when the error is a card rate-limit (429-equivalent at card-kit level). */

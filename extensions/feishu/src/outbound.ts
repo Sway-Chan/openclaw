@@ -126,9 +126,10 @@ async function sendOutboundText(params: {
   to: string;
   text: string;
   replyToMessageId?: string;
+  threadId?: string | number | null;
   accountId?: string;
 }) {
-  const { cfg, to, text, accountId, replyToMessageId } = params;
+  const { cfg, to, text, accountId, replyToMessageId, threadId } = params;
   const commentResult = await sendCommentThreadReply({
     cfg,
     to,
@@ -152,8 +153,10 @@ async function sendOutboundText(params: {
     }
   }
 
-  return sendMessageFeishu({ cfg, to, text, accountId, replyToMessageId });
+  const resolvedReplyTo = resolveReplyToMessageId({ replyToId: replyToMessageId, threadId });
+  return sendMessageFeishu({ cfg, to, text, accountId, replyToMessageId: resolvedReplyTo });
 }
+
 
 export const feishuOutbound: ChannelOutboundAdapter = {
   deliveryMode: "direct",
@@ -236,6 +239,7 @@ export const feishuOutbound: ChannelOutboundAdapter = {
         text,
         accountId: accountId ?? undefined,
         replyToMessageId,
+        threadId,
       });
     },
     sendMedia: async ({
